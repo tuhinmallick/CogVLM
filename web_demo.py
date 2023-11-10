@@ -53,18 +53,21 @@ def load_model(args):
     model, model_args = CogVLMModel.from_pretrained(
         args.from_pretrained,
         args=argparse.Namespace(
-        deepspeed=None,
-        local_rank=0,
-        rank=0,
-        world_size=world_size,
-        model_parallel_size=world_size,
-        mode='inference',
-        fp16=args.fp16,
-        bf16=args.bf16,
-        skip_init=True,
-        use_gpu_initialization=True,
-        device=f'cuda'),
-        overwrite_args={'model_parallel_size': world_size} if world_size != 1 else {}
+            deepspeed=None,
+            local_rank=0,
+            rank=0,
+            world_size=world_size,
+            model_parallel_size=world_size,
+            mode='inference',
+            fp16=args.fp16,
+            bf16=args.bf16,
+            skip_init=True,
+            use_gpu_initialization=True,
+            device='cuda',
+        ),
+        overwrite_args={'model_parallel_size': world_size}
+        if world_size != 1
+        else {},
     )
     model = model.eval()
     assert world_size == get_model_parallel_world_size(), "world size must equal to model parallel size for cli_demo!"
@@ -90,10 +93,10 @@ def post(
         ):
     result_text = [(ele[0], ele[1]) for ele in result_previous]
     for i in range(len(result_text)-1, -1, -1):
-        if result_text[i][0] == "" or result_text[i][0] == None:
+        if result_text[i][0] == "" or result_text[i][0] is None:
             del result_text[i]
     print(f"history {result_text}")
-    
+
     global model, image_processor, text_processor_infer, is_grounding
 
     try:

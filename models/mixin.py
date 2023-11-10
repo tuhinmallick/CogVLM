@@ -16,27 +16,32 @@ class LlamaVisionExpertFCMixin(BaseMixin):
         self.num_layers = num_layers
         self.num_vision_layers = num_vision_layers
         if vision_layer_range is None:
-            vision_layer_range = [i for i in range(min(num_vision_layers, num_layers))]
+            vision_layer_range = list(range(min(num_vision_layers, num_layers)))
         self.vision_layer_range = vision_layer_range
-        self.gate_proj = nn.ModuleList([ColumnParallelLinear(
-            in_features,
-            hidden_features,
-            gather_output=False,
-            init_method=None,
-            bias=False,
-            params_dtype=params_dtype,
-            module=self,
-            name="dense_h_to_4h_gate",
-            skip_init=True,
-            device=device
-        ) for i in range(num_layers)])
+        self.gate_proj = nn.ModuleList(
+            [
+                ColumnParallelLinear(
+                    in_features,
+                    hidden_features,
+                    gather_output=False,
+                    init_method=None,
+                    bias=False,
+                    params_dtype=params_dtype,
+                    module=self,
+                    name="dense_h_to_4h_gate",
+                    skip_init=True,
+                    device=device,
+                )
+                for _ in range(num_layers)
+            ]
+        )
         # Trainable vision expert parameters
         vision_dense_h_to_4h_list = []
         vision_dense_4h_to_h_list = []
         gate_proj_list = []
 
 
-        for i in vision_layer_range:
+        for _ in vision_layer_range:
             vision_dense_h_to_4h = ColumnParallelLinear(
                 in_features,
                 hidden_features,
@@ -156,7 +161,7 @@ class LlamaVisionExpertAttnMixin(BaseMixin):
         self.num_vision_layers = num_vision_layers
         self.num_layers = num_layers
         if vision_layer_range is None:
-            vision_layer_range = [i for i in range(min(num_vision_layers, num_layers))]
+            vision_layer_range = list(range(min(num_vision_layers, num_layers)))
         self.vision_layer_range = vision_layer_range
 
         self.use_vision_expert = use_vision_expert
@@ -165,7 +170,7 @@ class LlamaVisionExpertAttnMixin(BaseMixin):
         if self.use_vision_expert:
             vision_query_key_value_list = []
             vision_dense_list = []
-            for i in vision_layer_range:
+            for _ in vision_layer_range:
                 vision_query_key_value = ColumnParallelLinear(
                     hidden_size,
                     3 * hidden_size,

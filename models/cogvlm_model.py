@@ -82,10 +82,11 @@ class ImageMixin(BaseMixin):
         self.eoi = nn.Parameter(torch.zeros(1, 1, args.hidden_size))
 
     def word_embedding_forward(self, input_ids, output_cross_layer, **kw_args):
-        vision_inputs = {}
-        for k in kw_args:
-            if k.startswith('vision_') and k != 'vision_expert_mask':
-                vision_inputs[k[7:]] = kw_args[k]
+        vision_inputs = {
+            k[7:]: kw_args[k]
+            for k in kw_args
+            if k.startswith('vision_') and k != 'vision_expert_mask'
+        }
         if input_ids.shape[1] == 1 or not vision_inputs:
             return self.transformer.word_embeddings(input_ids)
         image_emb = self.vit_model(**vision_inputs)[0]

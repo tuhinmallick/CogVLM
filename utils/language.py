@@ -1,12 +1,11 @@
 def base_history_to_prompt(self, history, query):
-    prompt = '<EOI>' + query
-    return prompt
+    return f'<EOI>{query}'
 
 def chat_history_to_prompt(self, history, query):
     prompt = "<EOI> [INST] "
-    for i, (old_query, response) in enumerate(history):
-        prompt += old_query + " [/INST] " + response + " [INST] "
-    prompt += query + " [/INST] "
+    for old_query, response in history:
+        prompt += f"{old_query} [/INST] {response} [INST] "
+    prompt += f"{query} [/INST] "
     return prompt
 
 _history_to_prompt = {
@@ -87,7 +86,7 @@ class llama2_text_processor:
         labels = [-100] * context_length + input_ids[context_length:]
 
         pad_len = self.max_target_length - len(input_ids)
-        input_ids = input_ids + [self.tokenizer.pad_token_id] * pad_len
+        input_ids += [self.tokenizer.pad_token_id] * pad_len
         attention_mask = attention_mask + [1] * pad_len
         vision_expert_mask = vision_expert_mask + [0] * pad_len
         image_embed_mask = image_embed_mask + [0] * pad_len
@@ -137,7 +136,7 @@ def get_masks_and_position_ids(seq, image_logits_mask):
         if image_logits_mask[0][i] == 0 or (i > 0 and image_logits_mask[0][i] != image_logits_mask[0][i - 1]):
             pid += 1
         position_ids.append(pid)
-    for i in range(tokens.shape[1]-image_logits_mask.shape[1]):
+    for _ in range(tokens.shape[1]-image_logits_mask.shape[1]):
         pid += 1
         position_ids.append(pid)
     position_ids = torch.tensor(position_ids, dtype=torch.long, device=tokens.device)
@@ -203,5 +202,6 @@ class llama2_text_processor_inference:
         return response.replace('</s>', '')
     
     def get_func(self, inputs, **kwargs):
-        get_func = partial(get_masks_and_position_ids, image_logits_mask=kwargs['image_rope_mask'])
-        return get_func
+        return partial(
+            get_masks_and_position_ids, image_logits_mask=kwargs['image_rope_mask']
+        )

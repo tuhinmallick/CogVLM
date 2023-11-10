@@ -11,9 +11,9 @@ from sat.helpers import print_rank0
 def find_all_files(path, suffix=".jpg"):
     target_files = []
     for cur_dir, _, files in os.walk(path, followlinks=True):
-        for f in files:
-            if f.endswith(suffix):
-                target_files.append(os.path.join(cur_dir, f))
+        target_files.extend(
+            os.path.join(cur_dir, f) for f in files if f.endswith(suffix)
+        )
     print_rank0(f'find {len(target_files)} files...')
     return target_files
 
@@ -24,8 +24,7 @@ class ItemDataset(Dataset):
         self.image_processor, self.text_processor = image_processor, text_processor
     
     def process_img(self, img):
-        img_dict = {'vision': self.image_processor(img)}
-        return img_dict
+        return {'vision': self.image_processor(img)}
     
     def process_text(self, answer, prompt):
         return self.text_processor(answer, prompt)
@@ -54,6 +53,4 @@ class ItemDataset(Dataset):
         if text_dict is None:
             print_rank0(f"Process text failed. Please check the max_target_length & max_source_length.\n The data is {data}", level=logging.WARNING)
             return {}
-        # other attr
-        ret = {**img_dict, **text_dict, "question_id": uni_key}
-        return ret
+        return {**img_dict, **text_dict, "question_id": uni_key}

@@ -24,16 +24,15 @@ def disable_untrainable_params(self):
                 if e[0].lower() in n.lower() and e[1].lower() in n.lower() and 55 > int(n[:n.find('.mlp')].split('.')[-1]) > 45:
                     flag = True
                     break
-            else:
-                if e.lower() in n.lower():
-                    flag = True
-                    break
+            elif e.lower() in n.lower():
+                flag = True
+                break
         if not flag:
             p.requires_grad_(False)
         else:
             total_trainable += p.numel()
             print_rank0(n)
-    print_rank0("***** Total trainable parameters: "+str(total_trainable)+" *****")
+    print_rank0(f"***** Total trainable parameters: {str(total_trainable)} *****")
 
 FineTuneTrainCogVLMModel.disable_untrainable_params = disable_untrainable_params
 
@@ -49,9 +48,11 @@ def data_collator(examples):
     tmp_example = examples[0]
     for k in tmp_example['vision']:
         if type(tmp_example['vision'][k]) is torch.Tensor:
-            img_args['vision_'+k] = torch.cat([example['vision'][k] for example in examples])
+            img_args[f'vision_{k}'] = torch.cat(
+                [example['vision'][k] for example in examples]
+            )
         else:
-            img_args['vision_'+k] = example['vision'][k]
+            img_args[f'vision_{k}'] = example['vision'][k]
     for example in examples:
         example.pop('vision')
         if 'cross' in example:
@@ -87,10 +88,7 @@ def broadcast_auto(data_dict):
 def get_batch(data_iterator, args, timers):
     # Broadcast data.
     timers('data loader').start()
-    if data_iterator is not None:
-        data = next(data_iterator)
-    else:
-        data = None
+    data = next(data_iterator) if data_iterator is not None else None
     timers('data loader').stop()
     data_b = broadcast_auto(data)
     for k in data_b:
@@ -119,15 +117,14 @@ def chat(model, tokenizer, tokens,
     # strategy = BeamSearchStrategy(temperature=temperature, top_p=top_p, top_k=top_k, end_tokens=[tokenizer.eos_token_id],
     #                               num_beams=num_beams, consider_end=True)
     get_func = llama2_text_processor_inference.get_func(None, None, image_rope_mask=kwargs['image_rope_mask'])
-    output = filling_sequence(
-        model, seq,
+    return filling_sequence(
+        model,
+        seq,
         batch_size=1,
         strategy=strategy,
         get_masks_and_position_ids=get_func,
         **kwargs
-    )[0]  # drop memory
-
-    return output
+    )[0]
 
 
 def forward_step_eval(data_iterator, model, args, timers):
@@ -215,8 +212,7 @@ def forward_step(data_iterator, model, args, timers):
 
 from utils.dataset import ItemDataset
 def create_dataset_function(image_processor, text_processor, path, args):
-    dataset = ItemDataset(image_processor, text_processor, args, path)
-    return dataset
+    return ItemDataset(image_processor, text_processor, args, path)
 
 from sat.model.finetune.lora2 import LoraMixin
 from sat.model.finetune.prompt_tuning import PTuningV2Mixin
@@ -244,7 +240,7 @@ if __name__ == '__main__':
         model.get_mixin("eva").vit_model.add_mixin("lora", LoraMixin(args.eva_args['num_layers'], args.lora_rank, layer_range=args.layer_range), reinit=True)
     elif args.use_qlora:
         model.add_mixin("lora", LoraMixin(args.num_layers, args.lora_rank, layer_range=args.layer_range, qlora=True), reinit=True)
-        
+
     if args.use_qlora and torch.cuda.is_available():
         model = model.to('cuda')
     from utils.language import llama2_tokenizer
@@ -257,6 +253,6 @@ if __name__ == '__main__':
         model.get_mixin("lora").merge_lora()
         model.get_mixin("eva").vit_model.get_mixin("lora").merge_lora()
         args.use_lora = False
-        args.save = "checkpoints/merged_lora_{}".format(args.eva_args["image_size"][0])
+        args.save = f'checkpoints/merged_lora_{args.eva_args["image_size"][0]}'
         from sat.training.model_io import save_checkpoint
         save_checkpoint(1, model, None, None, args)

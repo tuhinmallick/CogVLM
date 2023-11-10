@@ -22,9 +22,11 @@ def data_collator(examples):
     tmp_example = examples[0]
     for k in tmp_example['vision']:
         if type(tmp_example['vision'][k]) is torch.Tensor:
-            img_args['vision_'+k] = torch.cat([example['vision'][k] for example in examples])
+            img_args[f'vision_{k}'] = torch.cat(
+                [example['vision'][k] for example in examples]
+            )
         else:
-            img_args['vision_'+k] = example['vision'][k]
+            img_args[f'vision_{k}'] = example['vision'][k]
     for example in examples:
         example.pop('vision')
         if 'cross' in example:
@@ -60,10 +62,7 @@ def broadcast_auto(data_dict):
 def get_batch(data_iterator, args, timers):
     # Broadcast data.
     timers('data loader').start()
-    if data_iterator is not None:
-        data = next(data_iterator)
-    else:
-        data = None
+    data = next(data_iterator) if data_iterator is not None else None
     timers('data loader').stop()
     data_b = broadcast_auto(data)
     for k in data_b:
@@ -92,15 +91,14 @@ def chat(model, tokenizer, tokens,
     # strategy = BeamSearchStrategy(temperature=temperature, top_p=top_p, top_k=top_k, end_tokens=[tokenizer.eos_token_id],
     #                               num_beams=num_beams, consider_end=True)
     get_func = llama2_text_processor_inference.get_func(None, None, image_rope_mask=kwargs['image_rope_mask'])
-    output = filling_sequence(
-        model, seq,
+    return filling_sequence(
+        model,
+        seq,
         batch_size=1,
         strategy=strategy,
         get_masks_and_position_ids=get_func,
         **kwargs
-    )[0]  # drop memory
-
-    return output
+    )[0]
 
 
 def forward_step_eval(data_iterator, model, args, timers):
@@ -188,8 +186,7 @@ def forward_step(data_iterator, model, args, timers):
 
 from utils.dataset import ItemDataset
 def create_dataset_function(image_processor, text_processor, path, args):
-    dataset = ItemDataset(image_processor, text_processor, args, path)
-    return dataset
+    return ItemDataset(image_processor, text_processor, args, path)
 
 if __name__ == '__main__':
     py_parser = argparse.ArgumentParser(add_help=False)
