@@ -25,12 +25,13 @@ class XAttn(BaseMixin):
         key_layer = key_layer.permute(0, 2, 1, 3)
         value_layer = value_layer.permute(0, 2, 1, 3)
 
-        out = xops.memory_efficient_attention(
-            query_layer, key_layer, value_layer,
+        return xops.memory_efficient_attention(
+            query_layer,
+            key_layer,
+            value_layer,
             p=dropout_p,
             scale=self.scale,
-            )
-        return out
+        )
     
     def attention_forward(self, hidden_states, mask, **kw_args):
         self = self.transformer.layers[kw_args['layer_id']].attention
@@ -63,13 +64,12 @@ class NewLayerForward(BaseMixin):
             mask: [(1, 1), seq_len, seq_len]
         '''
         self = self.transformer.layers[kw_args['layer_id']]
-        
+
         attention_input = hidden_states
 
         # Self attention.
         attention_output = self.input_layernorm(self.attention(attention_input, mask, **kw_args))
 
-        # DropPath for attention
         if self.training and self.drop_path > 0.:
             if mpu.get_cuda_rng_tracker is not None:
                 # drop_path must use model parallel rng tracker
@@ -80,7 +80,7 @@ class NewLayerForward(BaseMixin):
                     random_tensor = (1-self.drop_path
                                     + torch.rand((attention_output.shape[0],), dtype=attention_output.dtype, device=attention_output.device)).floor_() / (1-self.drop_path)
                     attention_output = random_tensor.view(-1, 1, 1) * attention_output
-        
+
         # Residual connection.
         hidden_states = attention_input + attention_output
         mlp_input = hidden_states
@@ -96,10 +96,7 @@ class NewLayerForward(BaseMixin):
                                     + torch.rand((mlp_output.shape[0],), dtype=mlp_output.dtype, device=mlp_output.device)).floor_() / (1-self.drop_path)
                     mlp_output = random_tensor.view(-1, 1, 1) * mlp_output
 
-        # Second residual connection.
-        output = mlp_input + mlp_output
-
-        return output
+        return mlp_input + mlp_output
 
 class EVA2CLIPModel(BaseModel):
     def __init__(self, args, transformer=None, parallel_output=True, **kwargs):

@@ -40,8 +40,11 @@ def draw_boxes(image, boxes, texts, output_fn='output.png'):
     img_with_overlay.save(output_fn)
 
 def boxstr_to_boxes(box_str):
-    boxes = [[int(y)/1000 for y in x.split(',')] for x in box_str.split(';') if x.replace(',', '').isdigit()]
-    return boxes
+    return [
+        [int(y) / 1000 for y in x.split(',')]
+        for x in box_str.split(';')
+        if x.replace(',', '').isdigit()
+    ]
 
 def text_to_dict(text):
     doc = nlp(text)
@@ -58,13 +61,14 @@ def text_to_dict(text):
         if noun_phrase and noun_phrase[-1] == '?':
             noun_phrase = text[:box_position].strip()
         box_string = match.group(1)
-        
+
         noun_phrases.append(noun_phrase)
         boxes.append(boxstr_to_boxes(box_string))
 
-    pairs = []
-    for noun_phrase, box_string in zip(noun_phrases, boxes):
-        pairs.append((noun_phrase.lower(), box_string))
+    pairs = [
+        (noun_phrase.lower(), box_string)
+        for noun_phrase, box_string in zip(noun_phrases, boxes)
+    ]
     return dict(pairs)
 
 def parse_response(img, response, output_fn='output.png'):
@@ -77,10 +81,9 @@ def parse_response(img, response, output_fn='output.png'):
     pattern = r"\[\[(.*?)\]\]"
     positions = re.findall(pattern, response)
     boxes = [[[int(y) for y in x.split(',')] for x in pos.split(';') if x.replace(',', '').isdigit()] for pos in positions]
-    dic = text_to_dict(response)
-    if not dic:
+    if dic := text_to_dict(response):
+        texts, boxes = zip(*dic.items())
+    else:
         texts = []
         boxes = []
-    else:
-        texts, boxes = zip(*dic.items())
     draw_boxes(new_img, boxes, texts, output_fn=output_fn)

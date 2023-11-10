@@ -23,19 +23,24 @@ def main():
     model, model_args = FineTuneTestCogVLMModel.from_pretrained(
         args.from_pretrained,
         args=argparse.Namespace(
-        deepspeed=None,
-        local_rank=rank,
-        rank=rank,
-        world_size=world_size,
-        model_parallel_size=world_size,
-        mode='inference',
-        skip_init=True,
-        use_gpu_initialization=True if torch.cuda.is_available() else False,
-        device='cuda',
-        **vars(args)
-    ), url='local', overwrite_args={'model_parallel_size': 1})
+            deepspeed=None,
+            local_rank=rank,
+            rank=rank,
+            world_size=world_size,
+            model_parallel_size=world_size,
+            mode='inference',
+            skip_init=True,
+            use_gpu_initialization=bool(torch.cuda.is_available()),
+            device='cuda',
+            **vars(args)
+        ),
+        url='local',
+        overwrite_args={'model_parallel_size': 1},
+    )
     model = model.eval()
-    model_args.save = './checkpoints/merged_model_{}'.format(model_args.eva_args["image_size"][0])
+    model_args.save = (
+        f'./checkpoints/merged_model_{model_args.eva_args["image_size"][0]}'
+    )
     save_checkpoint(1, model, None, None, model_args)
 
 if __name__ == "__main__":

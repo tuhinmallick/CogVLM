@@ -34,17 +34,21 @@ def main():
     model, model_args = CogVLMModel.from_pretrained(
         args.from_pretrained,
         args=argparse.Namespace(
-        deepspeed=None,
-        local_rank=rank,
-        rank=rank,
-        world_size=world_size,
-        model_parallel_size=world_size,
-        mode='inference',
-        skip_init=True,
-        use_gpu_initialization=True if torch.cuda.is_available() else False,
-        device='cuda',
-        **vars(args)
-    ), overwrite_args={'model_parallel_size': world_size} if world_size != 1 else {})
+            deepspeed=None,
+            local_rank=rank,
+            rank=rank,
+            world_size=world_size,
+            model_parallel_size=world_size,
+            mode='inference',
+            skip_init=True,
+            use_gpu_initialization=bool(torch.cuda.is_available()),
+            device='cuda',
+            **vars(args)
+        ),
+        overwrite_args={'model_parallel_size': world_size}
+        if world_size != 1
+        else {},
+    )
     model = model.eval()
     from sat.mpu import get_model_parallel_world_size
     assert world_size == get_model_parallel_world_size(), "world size must equal to model parallel size for cli_demo!"
@@ -56,26 +60,22 @@ def main():
 
     text_processor_infer = llama2_text_processor_inference(tokenizer, args.max_length, model.image_length)
 
-    if not args.english:
-        if rank == 0:
-            print('欢迎使用 CogVLM-CLI ，输入图像URL或本地路径读图，继续输入内容对话，clear 重新开始，stop 终止程序')
-    else:
-        if rank == 0:
+    if rank == 0:
+        if args.english:
             print('Welcome to CogVLM-CLI. Enter an image URL or local file path to load an image. Continue inputting text to engage in a conversation. Type "clear" to start over, or "stop" to end the program.')
+        else:
+            print('欢迎使用 CogVLM-CLI ，输入图像URL或本地路径读图，继续输入内容对话，clear 重新开始，stop 终止程序')
     with torch.no_grad():
         while True:
             history = None
             cache_image = None
-            if not args.english:
-                if rank == 0:
+            if rank == 0:
+                if not args.english:
                     image_path = [input("请输入图像路径或URL（回车进入纯文本对话）： ")]
                 else:
-                    image_path = [None]
-            else:
-                if rank == 0:
                     image_path = [input("Please enter the image path or URL (press Enter for plain text conversation): ")]
-                else:
-                    image_path = [None]
+            else:
+                image_path = [None]
             if world_size > 1:
                 torch.distributed.broadcast_object_list(image_path, 0)
             image_path = image_path[0]
@@ -86,16 +86,10 @@ def main():
             if args.no_prompt and len(image_path) > 0:
                 query = ""
             else:
-                if not args.english:
-                    if rank == 0:
-                        query = [input("用户：")]
-                    else:
-                        query = [None]
+                if rank == 0:
+                    query = [input("用户：")] if not args.english else [input("User: ")]
                 else:
-                    if rank == 0:
-                        query = [input("User: ")]
-                    else:
-                        query = [None]
+                    query = [None]
                 if world_size > 1:
                     torch.distributed.broadcast_object_list(query, 0)
                 query = query[0]
@@ -125,25 +119,19 @@ def main():
                     print(e)
                     break
                 if rank == 0:
-                    if not args.english:
-                        print("模型："+response)
-                        if tokenizer.signal_type == "grounding":
-                            print("Grounding 结果已保存至 ./output.png")
-                    else:
-                        print("Model: "+response)
+                    if args.english:
+                        print(f"Model: {response}")
                         if tokenizer.signal_type == "grounding":
                             print("Grounding result is saved at ./output.png")
+                    else:
+                        print(f"模型：{response}")
+                        if tokenizer.signal_type == "grounding":
+                            print("Grounding 结果已保存至 ./output.png")
                 image_path = None
-                if not args.english:
-                    if rank == 0:
-                        query = [input("用户：")]
-                    else:
-                        query = [None]
+                if rank == 0:
+                    query = [input("用户：")] if not args.english else [input("User: ")]
                 else:
-                    if rank == 0:
-                        query = [input("User: ")]
-                    else:
-                        query = [None]
+                    query = [None]
                 if world_size > 1:
                     torch.distributed.broadcast_object_list(query, 0)
                 query = query[0]

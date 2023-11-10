@@ -24,7 +24,11 @@ def process_image(text, text_processor, img_processor, image=None):
     if image_position < 5:
         return text, image_position, (None, None)
     # extract path from [IMG][/IMG] using re
-    pattern = (text_processor.tokenizer.boi + r"(.*?)" + text_processor.tokenizer.eoi).replace('[', r'\[').replace(']', r'\]')
+    pattern = f"{text_processor.tokenizer.boi}(.*?){text_processor.tokenizer.eoi}".replace(
+        '[', r'\['
+    ).replace(
+        ']', r'\]'
+    )
     image_path = re.findall(pattern, text)
     image_path = image_path[-1] if image_path[-1] else None
     if image is None:
@@ -56,7 +60,7 @@ def chat(image_path, model, text_processor, img_processor,
     if not history:
         history = []
     if is_image_mode and not force_pil_image:
-        prompt = "{}{}{}".format(text_processor.tokenizer.boi, image_path if image_path else "", text_processor.tokenizer.eoi)
+        prompt = f'{text_processor.tokenizer.boi}{image_path if image_path else ""}{text_processor.tokenizer.eoi}'
     else:
         prompt = ""
     if not is_image_mode or not no_prompt:
@@ -77,25 +81,24 @@ def chat(image_path, model, text_processor, img_processor,
                     torch_image[k] = torch_image[k].to(next(model.parameters()).device)
         else:
             torch_image = torch_image.to(next(model.parameters()).dtype).to(next(model.parameters()).device)
-        
-    if not is_image_mode: # no image
+
+    if not is_image_mode:
         raise Exception("No image is not supported!")
-    else:
-        new_prompt = prompt[image_position:]
-        if not torch_image or hasattr(text_processor, 'no_eoi'):
-            new_prompt = new_prompt.replace(text_processor.tokenizer.eoi, '', 1)
-        inputs_dic = text_processor(new_prompt)
-        for k in inputs_dic:
-            if type(inputs_dic[k]) is torch.Tensor and inputs_dic[k].dtype is not torch.int and inputs_dic[k].dtype is not torch.long:
-                inputs_dic[k] = inputs_dic[k].to(next(model.parameters()).dtype)
-            if type(inputs_dic[k]) is torch.Tensor:
-                inputs_dic[k] = inputs_dic[k].to(next(model.parameters()).device)
-        inputs = inputs_dic['input_ids'].to(model.parameters().__next__().device)[0]
-    
+    new_prompt = prompt[image_position:]
+    if not torch_image or hasattr(text_processor, 'no_eoi'):
+        new_prompt = new_prompt.replace(text_processor.tokenizer.eoi, '', 1)
+    inputs_dic = text_processor(new_prompt)
+    for k in inputs_dic:
+        if type(inputs_dic[k]) is torch.Tensor and inputs_dic[k].dtype is not torch.int and inputs_dic[k].dtype is not torch.long:
+            inputs_dic[k] = inputs_dic[k].to(next(model.parameters()).dtype)
+        if type(inputs_dic[k]) is torch.Tensor:
+            inputs_dic[k] = inputs_dic[k].to(next(model.parameters()).device)
+    inputs = inputs_dic['input_ids'].to(model.parameters().__next__().device)[0]
+
     if max_length-len(inputs) <=1:
         response = "The prompt exceeds the context length limit, please try again."
         return response, history, (torch_image, pil_img)
-    
+
     seq = torch.cat(
         [inputs, torch.tensor([-1]*(max_length-len(inputs)), device=inputs.device)], dim=0
     )
@@ -105,7 +108,7 @@ def chat(image_path, model, text_processor, img_processor,
     if not is_image_mode:
         inputs = {}
     else:
-        inputs = {'vision_'+k:v for k,v in torch_image.items()}
+        inputs = {f'vision_{k}': v for k,v in torch_image.items()}
         inputs_dic.pop('input_ids')
         inputs = {**inputs, **inputs_dic}
     output = filling_sequence(
@@ -115,15 +118,11 @@ def chat(image_path, model, text_processor, img_processor,
         strategy=strategy,
         **inputs
     )[0] # drop memory
-    
+
     # ---------------
     # port from inference_glm.py, more general than chat mode
     # clip -1s and fill back generated things into seq
-    if type(output) is not list:
-        output_list = output.tolist()
-    else:
-        output_list = output
-
+    output_list = output.tolist() if type(output) is not list else output
     response = text_processor.tokenizer.decode(output_list[0])
     # print('original:', response)
     if hasattr(text_processor, 'process_response'):
@@ -132,5 +131,5 @@ def chat(image_path, model, text_processor, img_processor,
     if get_model_parallel_rank() == 0:
         from utils.parser import parse_response
         parse_response(pil_img, response)
-    history = history + [(query, response)]
+    history += [(query, response)]
     return response, history, (torch_image, pil_img)

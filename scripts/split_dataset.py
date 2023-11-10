@@ -4,9 +4,9 @@ import shutil
 def find_all_files(path, suffix=".jpg"):
     target_files = []
     for cur_dir, _, files in os.walk(path, followlinks=True):
-        for f in files:
-            if f.endswith(suffix):
-                target_files.append(os.path.join(cur_dir, f))
+        target_files.extend(
+            os.path.join(cur_dir, f) for f in files if f.endswith(suffix)
+        )
     print(f'find {len(target_files)} files...')
     return target_files
 
